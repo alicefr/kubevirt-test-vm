@@ -1,0 +1,45 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  labels:
+    kubevirt.io/vm: my-vm
+  name: my-vm
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        kubevirt.io/vm: my-vm
+    spec:
+      domain:
+        devices:
+          disks:
+          - disk:
+              bus: virtio
+            name: disk0
+          - disk:
+              bus: virtio
+            name: disk1
+        machine:
+          type: ""
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 1G
+      terminationGracePeriodSeconds: 0
+      accessCredentials:
+      - sshPublicKey:
+          source:
+            secret:
+              secretName: test-key
+          propagationMethod:
+            configDrive: {}
+      volumes:
+      - containerDisk:
+          image: localhost:5000/fedora-podman-cd:latest
+        name: disk0
+      - cloudInitConfigDrive:
+          userData: |
+            # #!/bin/bash
+            echo "Application setup goes here"
+        name: disk1
