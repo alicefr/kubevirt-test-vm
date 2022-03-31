@@ -5,13 +5,16 @@ TIME_RUNNING_TEST ?= 300
 TEST_FLAVOR ?= write,read,randread,randwrite
 BLOCKSIZE ?= 4k,1m
 FIO_JOBS_DIR=tests-setup/fio-jobs
-
+CD_IMAGE=fedora-podman-cd:latest
 build:
 	mkdir -p bin
 	go build -o bin/virtctl-test main.go
 
 fio-image:
 	$(CONTAINER_RUNTIME) build -t $(IMAGE) tests-setup
+
+cd-image:
+	$(CONTAINER_RUNTIME) build -t $(CD_IMAGE) containerdisk
 
 generate-fio-jobs:
 	mkdir -p fio-jobs
