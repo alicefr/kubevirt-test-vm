@@ -11,7 +11,7 @@ if [ "$(docker inspect -f '{{.State.Running}}' "${reg_name}" 2>/dev/null || true
     registry:2
 fi
 
- kind create cluster --config=kind.config
+kind create cluster --config=cluster/kind.config
 
 # connect the registry to the cluster network if not already connected
 if [ "$(docker inspect -f='{{json .NetworkSettings.Networks.kind}}' "${reg_name}")" = 'null' ]; then
@@ -32,5 +32,5 @@ data:
     help: "https://kind.sigs.k8s.io/docs/user/local-registry/"
 EOF
 
-IP=$(docker inspect -f='{{json .NetworkSettings.Networks.kind}}' "${reg_name}")
-docker exec -ti kubevirt-kind-control-plane bash -c "echo \"$IP registry\" >> /etc/hosts"
+#IP=$(docker inspect -f='{{json .NetworkSettings.Networks.kind}}' "${reg_name}")
+#docker exec -ti kubevirt-kind-control-plane bash -c "echo \"$IP registry\" >> /etc/hosts"
