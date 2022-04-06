@@ -20,11 +20,15 @@ import (
 	"kubevirt.io/kubevirt/pkg/virtctl/templates"
 )
 
-const defaultImage = "fio:latest"
+const (
+	defaultImage    = "localhost:5000/fedora-podman-cd:latest"
+	defaultNodePort = 32756
+)
 
 var (
 	SSHKeyPath string
 	image      string
+	nodePort   int32
 )
 
 type createCommand struct {
@@ -40,10 +44,11 @@ func NewCreateTestVMCommand(clientConfig clientcmd.ClientConfig) *cobra.Command 
 			return c.run(cmd, args)
 		},
 	}
+	cmd.PersistentFlags().StringVar(&vmName, "name", "", "Name for the testing VM")
 	cmd.PersistentFlags().StringVar(&SSHKeyPath, "ssh-key", "", "SSH key path to use for accessing the test VM")
-	//cmd.PersistentFlags().StringVar(&vmName, "name", "", "Name for the testing VM")
 	cmd.PersistentFlags().StringVar(&pvc, "pvc", "", "Name of the PVC to run the tests")
 	cmd.PersistentFlags().StringVar(&image, "image", defaultImage, "Name of the image to run the tests")
+	cmd.PersistentFlags().Int32Var(&nodePort, "port", defaultNodePort, "Node port to use to expose the SSH service")
 	cmd.SetUsageTemplate(templates.UsageTemplate())
 	return cmd
 }
@@ -56,10 +61,6 @@ func validateParameters() error {
 		return fmt.Errorf("vm is empty and it si required to be set")
 	}
 	return nil
-}
-
-func generatePortForSSHService() int32 {
-	return 32756
 }
 
 func (c *createCommand) run(cmd *cobra.Command, args []string) error {
@@ -89,10 +90,12 @@ func (c *createCommand) run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("fail reading ssh file: %v", err)
 	}
+	labels := map[string]string{labelTest: vmName}
 	secretName := vmName + "-ssh-key"
 	secret := &k8scorev1.Secret{
 		ObjectMeta: k8smetav1.ObjectMeta{
-			Name: secretName,
+			Name:   secretName,
+			Labels: labels,
 		},
 		Data: map[string][]byte{"ssh-key": data},
 		Type: k8scorev1.SecretTypeOpaque,
@@ -103,6 +106,9 @@ func (c *createCommand) run(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		fmt.Printf("Secret %s already exists \n", secretName)
+	}
+	if err == nil {
+		fmt.Printf("Created secret %s \n", secretName)
 	}
 
 	volumes := []kubevirtcorev1.Volume{
@@ -119,7 +125,7 @@ func (c *createCommand) run(cmd *cobra.Command, args []string) error {
 			VolumeSource: kubevirtcorev1.VolumeSource{
 				CloudInitConfigDrive: &kubevirtcorev1.CloudInitConfigDriveSource{
 					UserData: `#!/bin/bash
-            echo "Application setup goes here"
+echo "Application setup goes here"
 `,
 				},
 			},
@@ -172,7 +178,8 @@ func (c *createCommand) run(cmd *cobra.Command, args []string) error {
 	// Create VMI
 	vmi := &kubevirtcorev1.VirtualMachineInstance{
 		ObjectMeta: k8smetav1.ObjectMeta{
-			Name: vmName,
+			Name:   vmName,
+			Labels: labels,
 		},
 		Spec: kubevirtcorev1.VirtualMachineInstanceSpec{
 			Domain: kubevirtcorev1.DomainSpec{
@@ -208,14 +215,16 @@ func (c *createCommand) run(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Printf("VMI %s already exists \n", vmName)
 	}
-	// Create service to expose ssh port
-	nodePort := generatePortForSSHService()
+	if err == nil {
+		fmt.Printf("Created VMI %s \n", vmName)
+	}
 
-	// actually create the service
+	// Create service to expose ssh port
 	svcName := vmName + "-svc"
 	service := &k8scorev1.Service{
 		ObjectMeta: k8smetav1.ObjectMeta{
-			Name: svcName,
+			Name:   svcName,
+			Labels: labels,
 		},
 		Spec: k8scorev1.ServiceSpec{
 			Ports: []k8scorev1.ServicePort{
@@ -228,7 +237,7 @@ func (c *createCommand) run(cmd *cobra.Command, args []string) error {
 				},
 			},
 			Type:     k8scorev1.ServiceTypeNodePort,
-			Selector: vmi.ObjectMeta.Labels,
+			Selector: labels,
 		},
 	}
 	_, err = client.CoreV1().Services(namespace).Create(context.TODO(), service, k8smetav1.CreateOptions{})
@@ -237,6 +246,9 @@ func (c *createCommand) run(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		fmt.Printf("Port already allocated probably the svc %s already exists \n", svcName)
+	}
+	if err == nil {
+		fmt.Printf("Created service %s \n", svcName)
 	}
 	return nil
 }

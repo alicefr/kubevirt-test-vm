@@ -3,7 +3,7 @@ ioengine=libaio
 invalidate=1
 ramp_time=5
 iodepth=1
-runtime=20
+runtime=300
 time_based
 direct=1
 

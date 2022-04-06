@@ -25,6 +25,7 @@ func NewGetDiskCommand(clientConfig clientcmd.ClientConfig) *cobra.Command {
 			return c.run(cmd, args)
 		},
 	}
+	cmd.PersistentFlags().StringVar(&vmName, "name", "", "Name for the testing VM")
 	cmd.PersistentFlags().StringVar(&volume, "volume", "", "Name of the volume to run the tests")
 	cmd.SetUsageTemplate(templates.UsageTemplate())
 	return cmd

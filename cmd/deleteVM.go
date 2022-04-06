@@ -25,7 +25,7 @@ func NewDeleteTestVMCommand(clientConfig clientcmd.ClientConfig) *cobra.Command 
 			return c.run(cmd, args)
 		},
 	}
-	//cmd.PersistentFlags().StringVar(&vmName, "name", "", "Name for the testing VM")
+	cmd.PersistentFlags().StringVar(&vmName, "name", "", "Name for the testing VM")
 	cmd.SetUsageTemplate(templates.UsageTemplate())
 	return cmd
 }

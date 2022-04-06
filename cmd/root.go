@@ -10,7 +10,10 @@ import (
 	"kubevirt.io/client-go/log"
 )
 
-const programName = "kubevirt-test"
+const (
+	programName = "kubevirt-test"
+	labelTest   = "test"
+)
 
 var (
 	vmName string
@@ -43,12 +46,12 @@ func NewVirtctlTestCommand() *cobra.Command {
 			return result
 		},
 	)
-	rootCmd.PersistentFlags().StringVar(&vmName, "name", "", "Name for the testing VM")
 	clientConfig := kubecli.DefaultClientConfig(rootCmd.PersistentFlags())
 	//rootCmd.SetUsageTemplate(templates.MainUsageTemplate())
 	rootCmd.AddCommand(
 		NewCreateTestVMCommand(clientConfig),
 		NewDeleteTestVMCommand(clientConfig),
+		NewGetNodeCommand(clientConfig),
 		NewGetDiskCommand(clientConfig),
 	)
 	return rootCmd
