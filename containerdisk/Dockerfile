@@ -1,16 +1,21 @@
-FROM quay.io/kubevirt/libguestfs-tools:20220331_9da70587e as builder
+FROM fedora:35
 
 ENV LIBGUESTFS_BACKEND direct
-ENV LIBGUESTFS_PATH /usr/local/lib/guestfs/appliance
-USER 0
-RUN /entrypoint.sh
-RUN virt-builder fedora-35 \
-        -v \
-        --format qcow2  \
-        --run-command "sed -i 's/SELINUX=.*/SELINUX=disabled/g' /etc/selinux/config" \
-        -o /tmp/disk.img \
-        --install podman,openssh-server  \
-        --root-password password:test 
-FROM stratch
+ENV IMAGE https://download.fedoraproject.org/pub/fedora/linux/releases/35/Cloud/x86_64/images/Fedora-Cloud-Base-35-1.2.x86_64.qcow2
 
-COPY --from=builder /tmp/disk.img /disk/disk.img
+RUN dnf install -y libguestfs guestfs-tools curl
+
+# Cache image download for the next steps
+RUN curl -L -o /disk.img ${IMAGE}
+
+RUN virt-customize -a /disk.img --install cloud-init,podman,openssh-server
+
+RUN virt-customize -a /disk.img \
+      --root-password password:test \
+      --run-command "sed -i 's/SELINUX=.*/SELINUX=disabled/g' /etc/selinux/config" \
+      --run-command "dnf clean all -y" 
+
+RUN virt-sparsify --in-place /disk.img
+
+FROM scratch
+COPY --from=builder /disk.img /disk/disk.img
