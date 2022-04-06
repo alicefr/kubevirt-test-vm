@@ -1,7 +1,7 @@
 FROM fedora:35
 
-RUN dnf install -y fio python3 && dnf clean all
+RUN dnf install -y fio python3 util-linux && dnf clean all -y
 RUN mkdir -p /output
 COPY ./fio-jobs /fio-jobs
-WORKDIR output
-ENTRYPOINT ["/bin/bash", "-l", "-c"]
+COPY ./fio.sh /fio.sh
+ENTRYPOINT ["/fio.sh"]
