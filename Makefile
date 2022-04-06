@@ -1,4 +1,4 @@
-CONTAINER_RUNTIME ?= docker
+CONTAINER_RUNTIME ?= podman
 IMAGE=fio
 DEVICE_IN_CONTAINER ?= device-to-test
 TIME_RUNNING_TEST ?= 300
@@ -19,7 +19,6 @@ cd-image:
 generate-fio-jobs:
 	mkdir -p fio-jobs
 	$(CONTAINER_RUNTIME) run -ti --security-opt label=disable \
-	--user $(shell id -u) \
 	-v $(PWD)/$(FIO_JOBS_DIR):/fio-jobs \
 	-w /fio-jobs \
 	--hostname fio \
