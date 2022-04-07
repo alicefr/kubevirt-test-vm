@@ -1,4 +1,4 @@
-FROM fedora:35
+FROM fedora:35 as builder
 
 ENV LIBGUESTFS_BACKEND direct
 ENV IMAGE https://download.fedoraproject.org/pub/fedora/linux/releases/35/Cloud/x86_64/images/Fedora-Cloud-Base-35-1.2.x86_64.qcow2
