@@ -125,7 +125,7 @@ func (c *createCommand) run(cmd *cobra.Command, args []string) error {
 			VolumeSource: kubevirtcorev1.VolumeSource{
 				CloudInitConfigDrive: &kubevirtcorev1.CloudInitConfigDriveSource{
 					UserData: `#!/bin/bash
-echo "Application setup goes here"
+systemctl --user enable --now podman.socket"
 `,
 				},
 			},
