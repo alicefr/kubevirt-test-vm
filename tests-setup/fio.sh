@@ -12,6 +12,6 @@ fi
 mkdir -p $OUTPUT_DIR
 # Preallocate disks to have consistent tests
 size=$(lsblk |grep $device |awk '{ print $4 }')
-fallocate -l $size $device
+fallocate -l $size -x $device
 
 fio /fio-jobs/*.fio --output $OUTPUT_DIR/fio.log
