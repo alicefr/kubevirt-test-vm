@@ -1,17 +1,20 @@
 CONTAINER_RUNTIME ?= podman
-IMAGE=fio
+REGISTRY ?= quay.io/afrosi_rh
 DEVICE_IN_CONTAINER ?= device-to-test
 TIME_RUNNING_TEST ?= 300
 TEST_FLAVOR ?= write,read,randread,randwrite
 BLOCKSIZE ?= 4k,1m
 FIO_JOBS_DIR=tests-setup/fio-jobs
-CD_IMAGE=fedora-podman-cd:latest
+TAG=latest
+CD_IMAGE=$(REGISTRY)/fedora-podman-cd:$(TAG)
+FIO_IMAGE=$(REGISTRY)/fio:$(TAG)
+
 build:
 	mkdir -p bin
 	go build -o bin/virtctl-test main.go
 
 fio-image:
-	$(CONTAINER_RUNTIME) build -t $(IMAGE) tests-setup
+	$(CONTAINER_RUNTIME) build -t $(FIO_IMAGE) tests-setup
 
 cd-image:
 	$(CONTAINER_RUNTIME) build -t $(CD_IMAGE) containerdisk
