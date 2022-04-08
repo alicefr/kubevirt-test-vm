@@ -14,5 +14,4 @@ podman -r run --security-opt label=disable -d \
 	-w /output \
 	--tls-verify=false \
 	-v ${DEVICE}:/dev/device-to-test \
-	quay.io/afrosi_rh/fio:latest \
-	"fio /fio-jobs/*.fio --output /output/fio.log"
+	quay.io/afrosi_rh/fio:latest
