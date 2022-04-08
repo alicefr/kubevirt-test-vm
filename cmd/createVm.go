@@ -29,6 +29,7 @@ var (
 	SSHKeyPath string
 	image      string
 	nodePort   int32
+	userList   string
 )
 
 type createCommand struct {
@@ -47,6 +48,7 @@ func NewCreateTestVMCommand(clientConfig clientcmd.ClientConfig) *cobra.Command 
 	cmd.PersistentFlags().StringVar(&vmName, "name", "", "Name for the testing VM")
 	cmd.PersistentFlags().StringVar(&SSHKeyPath, "ssh-key", "", "SSH key path to use for accessing the test VM")
 	cmd.PersistentFlags().StringVar(&pvc, "pvc", "", "Name of the PVC to run the tests")
+	cmd.PersistentFlags().StringVar(&userList, "vm-user", "", "Users to add the ssh key. Specify multiple user separated y ,")
 	cmd.PersistentFlags().StringVar(&image, "image", defaultImage, "Name of the image to run the tests")
 	cmd.PersistentFlags().Int32Var(&nodePort, "port", defaultNodePort, "Node port to use to expose the SSH service")
 	cmd.SetUsageTemplate(templates.UsageTemplate())
@@ -59,6 +61,9 @@ func validateParameters() error {
 	}
 	if vmName == "" {
 		return fmt.Errorf("vm is empty and it si required to be set")
+	}
+	if userList == "" {
+		return fmt.Errorf("at least a user is required")
 	}
 	return nil
 }
@@ -85,6 +90,7 @@ func (c *createCommand) run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	users := strings.Split(userList, ",")
 	// Create a secret out of the ssh key
 	data, err := ioutil.ReadFile(SSHKeyPath)
 	if err != nil {
@@ -125,7 +131,8 @@ func (c *createCommand) run(cmd *cobra.Command, args []string) error {
 			VolumeSource: kubevirtcorev1.VolumeSource{
 				CloudInitConfigDrive: &kubevirtcorev1.CloudInitConfigDriveSource{
 					UserData: `#!/bin/bash
-systemctl --user enable --now podman.socket"
+sudo systemctl --user enable --now podman.socket
+sudo loginctl enable-linger root
 `,
 				},
 			},
@@ -200,7 +207,9 @@ systemctl --user enable --now podman.socket"
 							},
 						},
 						PropagationMethod: kubevirtcorev1.SSHPublicKeyAccessCredentialPropagationMethod{
-							ConfigDrive: &kubevirtcorev1.ConfigDriveSSHPublicKeyAccessCredentialPropagation{},
+							QemuGuestAgent: &kubevirtcorev1.QemuGuestAgentSSHPublicKeyAccessCredentialPropagation{
+								Users: users,
+							},
 						},
 					},
 				},
