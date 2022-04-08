@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fio-output
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: fio-test
+  name: fio-test
+spec:
+  containers:
+  - image: quay.io/afrosi_rh/fio:latest
+    name: fio-test
+    workingDir: /output
+    volumeDevices:
+    - devicePath: /dev/device-to-test
+      name: device-to-test
+    volumeMounts:
+    - name: output
+      mountPath: /output
+    command: ["/fio.sh"]
+    securityContext:
+      privileged: true
+  dnsPolicy: ClusterFirst
+  restartPolicy: Never
+  volumes:
+  - name: device-to-test
+    persistentVolumeClaim:
+      claimName: pvc-block
+  - name: output
+    persistentVolumeClaim:
+      claimName: fio-output
