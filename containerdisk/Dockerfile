@@ -8,10 +8,13 @@ RUN dnf install -y libguestfs guestfs-tools curl
 # Cache image download for the next steps
 RUN curl -L -o /disk.img ${IMAGE}
 
-RUN virt-customize -a /disk.img --install cloud-init,podman,openssh-server
+RUN virt-customize -a /disk.img --install cloud-init,podman,openssh-server,qemu-guest-agent
 
 RUN virt-customize -a /disk.img \
       --root-password password:test \
+      --firstboot-command 'useradd -m  fedora -s /bin/bash' \
+      --firstboot-command 'echo "fedora ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/fedora' \
+      --password  'fedora:password:fedora' \
       --run-command "sed -i 's/SELINUX=.*/SELINUX=disabled/g' /etc/selinux/config" \
       --run-command "dnf clean all -y" 
 
