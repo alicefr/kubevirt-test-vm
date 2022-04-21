@@ -21,8 +21,9 @@ import (
 )
 
 const (
-	defaultImage    = "localhost:5000/fedora-podman-cd:latest"
-	defaultNodePort = 32756
+	defaultWorkloadImage = "quay.io/afrosi_rh/fio:latest"
+	defaultImage         = "quay.io/afrosi_rh/fedora-podman-cd:latest"
+	defaultNodePort      = 32756
 )
 
 var (
@@ -56,23 +57,33 @@ func NewCreateTestVMCommand(clientConfig clientcmd.ClientConfig) *cobra.Command 
 }
 
 func validateParameters() error {
-	if SSHKeyPath == "" {
-		return fmt.Errorf("ssh key path is empty and it is required to be set")
-	}
 	if vmName == "" {
 		return fmt.Errorf("vm is empty and it si required to be set")
 	}
-	if userList == "" {
-		return fmt.Errorf("at least a user is required")
+	if SSHKeyPath != "" && userList == "" {
+		return fmt.Errorf("when an ssh key is passed at least a user is required")
 	}
 	return nil
 }
 
+func generatePCIAddress() string {
+	return "0000:00:11.0"
+}
+
+func pciAddressShell(address string) string {
+	return strings.ReplaceAll(address, ":", `\:`)
+}
+
 func (c *createCommand) run(cmd *cobra.Command, args []string) error {
+	var accessCredential kubevirtcorev1.AccessCredential
+	var volumes []kubevirtcorev1.Volume
+	var disks []kubevirtcorev1.Disk
 	err := validateParameters()
 	if err != nil {
 		return err
 	}
+	labels := map[string]string{labelTest: vmName}
+
 	conf, err := c.clientConfig.ClientConfig()
 	if err != nil {
 		return err
@@ -90,75 +101,51 @@ func (c *createCommand) run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	users := strings.Split(userList, ",")
-	// Create a secret out of the ssh key
-	data, err := ioutil.ReadFile(SSHKeyPath)
-	if err != nil {
-		return fmt.Errorf("fail reading ssh file: %v", err)
-	}
-	labels := map[string]string{labelTest: vmName}
-	secretName := vmName + "-ssh-key"
-	secret := &k8scorev1.Secret{
-		ObjectMeta: k8smetav1.ObjectMeta{
-			Name:   secretName,
-			Labels: labels,
-		},
-		Data: map[string][]byte{"ssh-key": data},
-		Type: k8scorev1.SecretTypeOpaque,
-	}
-	_, err = client.CoreV1().Secrets(namespace).Create(context.TODO(), secret, k8smetav1.CreateOptions{})
-	if err != nil {
-		if !errors.IsAlreadyExists(err) {
-			return err
+	if SSHKeyPath != "" {
+		users := strings.Split(userList, ",")
+		// Create a secret out of the ssh key
+		data, err := ioutil.ReadFile(SSHKeyPath)
+		if err != nil {
+			return fmt.Errorf("fail reading ssh file: %v", err)
 		}
-		fmt.Printf("Secret %s already exists \n", secretName)
-	}
-	if err == nil {
-		fmt.Printf("Created secret %s \n", secretName)
-	}
+		secretName := vmName + "-ssh-key"
+		secret := &k8scorev1.Secret{
+			ObjectMeta: k8smetav1.ObjectMeta{
+				Name:   secretName,
+				Labels: labels,
+			},
+			Data: map[string][]byte{"ssh-key": data},
+			Type: k8scorev1.SecretTypeOpaque,
+		}
+		_, err = client.CoreV1().Secrets(namespace).Create(context.TODO(), secret, k8smetav1.CreateOptions{})
+		if err != nil {
+			if !errors.IsAlreadyExists(err) {
+				return err
+			}
+			fmt.Printf("Secret %s already exists \n", secretName)
+		}
+		accessCredential = kubevirtcorev1.AccessCredential{
+			SSHPublicKey: &kubevirtcorev1.SSHPublicKeyAccessCredential{
+				Source: kubevirtcorev1.SSHPublicKeyAccessCredentialSource{
+					Secret: &kubevirtcorev1.AccessCredentialSecretSource{
+						SecretName: secretName,
+					},
+				},
+				PropagationMethod: kubevirtcorev1.SSHPublicKeyAccessCredentialPropagationMethod{
+					QemuGuestAgent: &kubevirtcorev1.QemuGuestAgentSSHPublicKeyAccessCredentialPropagation{
+						Users: users,
+					},
+				},
+			},
+		}
 
-	volumes := []kubevirtcorev1.Volume{
-		{
-			Name: "disk0",
-			VolumeSource: kubevirtcorev1.VolumeSource{
-				ContainerDisk: &kubevirtcorev1.ContainerDiskSource{
-					Image: image,
-				},
-			},
-		},
-		{
-			Name: "config-driver-ssh",
-			VolumeSource: kubevirtcorev1.VolumeSource{
-				CloudInitConfigDrive: &kubevirtcorev1.CloudInitConfigDriveSource{
-					UserData: `#!/bin/bash
-sudo systemctl --user enable --now podman.socket
-sudo loginctl enable-linger root
-`,
-				},
-			},
-		},
+		if err == nil {
+			fmt.Printf("Created secret %s \n", secretName)
+		}
 	}
-
-	disks := []kubevirtcorev1.Disk{
-		{
-			Name: "disk0",
-			DiskDevice: kubevirtcorev1.DiskDevice{
-				Disk: &kubevirtcorev1.DiskTarget{
-					Bus: "virtio",
-				},
-			},
-		},
-		{
-			Name: "config-driver-ssh",
-			DiskDevice: kubevirtcorev1.DiskDevice{
-				Disk: &kubevirtcorev1.DiskTarget{
-					Bus: "virtio",
-				},
-			},
-		},
-	}
-
+	var executeTests string
 	if pvc != "" {
+		pciAddress := generatePCIAddress()
 		volumes = append(volumes, kubevirtcorev1.Volume{
 			Name: pvc,
 			VolumeSource: kubevirtcorev1.VolumeSource{
@@ -174,11 +161,59 @@ sudo loginctl enable-linger root
 			Name: pvc,
 			DiskDevice: kubevirtcorev1.DiskDevice{
 				Disk: &kubevirtcorev1.DiskTarget{
-					Bus: "virtio",
+					Bus:        "virtio",
+					PciAddress: pciAddress,
 				},
 			},
 		})
+
+		executeTests = fmt.Sprintf(`
+device=$(ls /sys/bus/pci/devices/%s/virtio*/block/)
+[ -z "$device" ] && false
+podman run --security-opt label=disable -d -v /tmp:/output --privileged -w /output --tls-verify=false -v /dev/"$device":/dev/device-to-test %s
+`, pciAddressShell(pciAddress), defaultWorkloadImage)
 	}
+	var order uint
+	order = 1
+	disks = append(disks, kubevirtcorev1.Disk{
+		Name:      "disk0",
+		BootOrder: &order,
+		DiskDevice: kubevirtcorev1.DiskDevice{
+			Disk: &kubevirtcorev1.DiskTarget{
+				Bus: "virtio",
+			},
+		},
+	})
+	disks = append(disks, kubevirtcorev1.Disk{
+		Name: "config-driver",
+		DiskDevice: kubevirtcorev1.DiskDevice{
+			Disk: &kubevirtcorev1.DiskTarget{
+				Bus: "virtio",
+			},
+		},
+	})
+
+	volumes = append(volumes, kubevirtcorev1.Volume{
+		Name: "disk0",
+		VolumeSource: kubevirtcorev1.VolumeSource{
+			ContainerDisk: &kubevirtcorev1.ContainerDiskSource{
+				Image: image,
+			},
+		},
+	})
+	volumes = append(volumes, kubevirtcorev1.Volume{
+		Name: "config-driver",
+		VolumeSource: kubevirtcorev1.VolumeSource{
+			CloudInitConfigDrive: &kubevirtcorev1.CloudInitConfigDriveSource{
+				UserData: fmt.Sprintf(`#!/bin/bash
+set -x
+sudo systemctl --user enable --now podman.socket
+sudo loginctl enable-linger root
+ %s `, executeTests),
+			},
+		},
+	})
+
 	requests := map[k8scorev1.ResourceName]resource.Quantity{
 		k8scorev1.ResourceMemory: resource.MustParse("1G"),
 	}
@@ -197,23 +232,8 @@ sudo loginctl enable-linger root
 					Requests: requests,
 				},
 			},
-			Volumes: volumes,
-			AccessCredentials: []kubevirtcorev1.AccessCredential{
-				{
-					SSHPublicKey: &kubevirtcorev1.SSHPublicKeyAccessCredential{
-						Source: kubevirtcorev1.SSHPublicKeyAccessCredentialSource{
-							Secret: &kubevirtcorev1.AccessCredentialSecretSource{
-								SecretName: secretName,
-							},
-						},
-						PropagationMethod: kubevirtcorev1.SSHPublicKeyAccessCredentialPropagationMethod{
-							QemuGuestAgent: &kubevirtcorev1.QemuGuestAgentSSHPublicKeyAccessCredentialPropagation{
-								Users: users,
-							},
-						},
-					},
-				},
-			},
+			Volumes:           volumes,
+			AccessCredentials: []kubevirtcorev1.AccessCredential{accessCredential},
 		},
 	}
 
