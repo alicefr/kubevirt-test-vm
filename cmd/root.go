@@ -51,10 +51,11 @@ func NewVirtctlTestCommand() *cobra.Command {
 	clientConfig := kubecli.DefaultClientConfig(rootCmd.PersistentFlags())
 	rootCmd.AddCommand(
 		NewCreateTestVMCommand(clientConfig),
-		NewDeleteTestVMCommand(clientConfig),
 		NewCreateTestPodCommand(clientConfig),
 		NewCopyOutputVMCommand(clientConfig),
 		NewCopyOutputPodCommand(clientConfig),
+		NewDeleteTestVMCommand(clientConfig),
+		NewDeleteTestPodCommand(clientConfig),
 	)
 	return rootCmd
 }
