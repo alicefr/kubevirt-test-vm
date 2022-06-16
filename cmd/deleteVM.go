@@ -6,7 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"kubevirt.io/client-go/kubecli"
 	"kubevirt.io/kubevirt/pkg/virtctl/templates"
@@ -35,12 +34,7 @@ func (c *deleteCommand) run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("vm is empty and it si required to be set")
 	}
 
-	conf, err := c.clientConfig.ClientConfig()
-	if err != nil {
-		return err
-	}
-
-	client, err := kubernetes.NewForConfig(conf)
+	client, err := GetKubernetesClient(c.clientConfig)
 	if err != nil {
 		return err
 	}

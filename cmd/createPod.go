@@ -9,7 +9,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"kubevirt.io/kubevirt/pkg/virtctl/templates"
 )
@@ -53,12 +52,7 @@ func (c *createPodCommand) run(cmd *cobra.Command, args []string) error {
 	labels := map[string]string{labelTest: podName}
 	vMode := k8scorev1.PersistentVolumeFilesystem
 	pvcOutputName := PvcOutputName(podName)
-	conf, err := c.clientConfig.ClientConfig()
-	if err != nil {
-		return err
-	}
-
-	client, err := kubernetes.NewForConfig(conf)
+	client, err := GetKubernetesClient(c.clientConfig)
 	if err != nil {
 		return err
 	}
