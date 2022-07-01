@@ -21,7 +21,6 @@ import (
 const (
 	DefaultWorkloadImage = "quay.io/afrosi_rh/fio:latest"
 	DefaultVMImage       = "quay.io/afrosi_rh/fedora-podman-cd:latest"
-	OutputTestDir        = "/output"
 	FioContainerName     = "fio"
 	defaultNodePort      = 32756
 )
@@ -69,9 +68,6 @@ func (c *createCommand) run(cmd *cobra.Command, args []string) error {
 	var accessCredential kubevirtcorev1.AccessCredential
 	var volumes []kubevirtcorev1.Volume
 	var disks []kubevirtcorev1.Disk
-	if userList == "" {
-		userList = "fedora"
-	}
 	labels := map[string]string{labelTest: vmName}
 
 	client, err := GetKubernetesClient(c.clientConfig)
@@ -86,7 +82,13 @@ func (c *createCommand) run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if pvc == "" {
+		return fmt.Errorf("the pvc needs to be set")
+	}
 	if SSHKeyPath != "" {
+		if userList == "" {
+			userList = "fedora"
+		}
 		users := strings.Split(userList, ",")
 		// Create a secret out of the ssh key
 		data, err := ioutil.ReadFile(SSHKeyPath)
@@ -129,36 +131,59 @@ func (c *createCommand) run(cmd *cobra.Command, args []string) error {
 		}
 	}
 	var executeTests string
-	if pvc != "" {
-		pciAddress := generatePCIAddress()
-		volumes = append(volumes, kubevirtcorev1.Volume{
-			Name: pvc,
-			VolumeSource: kubevirtcorev1.VolumeSource{
-				PersistentVolumeClaim: &kubevirtcorev1.PersistentVolumeClaimVolumeSource{
-					PersistentVolumeClaimVolumeSource: k8scorev1.PersistentVolumeClaimVolumeSource{
-						ClaimName: pvc,
-					},
+	pciAddress := generatePCIAddress()
+	volumes = append(volumes, kubevirtcorev1.Volume{
+		Name: pvc,
+		VolumeSource: kubevirtcorev1.VolumeSource{
+			PersistentVolumeClaim: &kubevirtcorev1.PersistentVolumeClaimVolumeSource{
+				PersistentVolumeClaimVolumeSource: k8scorev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: pvc,
 				},
 			},
 		},
-		)
-		disks = append(disks, kubevirtcorev1.Disk{
-			Name: pvc,
-			DiskDevice: kubevirtcorev1.DiskDevice{
-				Disk: &kubevirtcorev1.DiskTarget{
-					Bus:        "virtio",
-					PciAddress: pciAddress,
+	})
+
+	// Create pvc for the output
+	pvcOutputName := PvcOutputName(vmName)
+	err = CreateOutputPVC(client, pvcOutputName, namespace, labels)
+
+	if err != nil {
+		return err
+	}
+	volumes = append(volumes, kubevirtcorev1.Volume{
+		Name: pvcOutputName,
+		VolumeSource: kubevirtcorev1.VolumeSource{
+			PersistentVolumeClaim: &kubevirtcorev1.PersistentVolumeClaimVolumeSource{
+				PersistentVolumeClaimVolumeSource: k8scorev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: pvcOutputName,
 				},
 			},
-		})
+		},
+	})
 
-		executeTests = fmt.Sprintf(`
+	disks = append(disks, kubevirtcorev1.Disk{
+		Name: pvc,
+		DiskDevice: kubevirtcorev1.DiskDevice{
+			Disk: &kubevirtcorev1.DiskTarget{
+				Bus:        "virtio",
+				PciAddress: pciAddress,
+			},
+		},
+	})
+
+	executeTests = fmt.Sprintf(`
 mkdir -p %s
+mount -t virtiofs %s %s
 device=$(ls /sys/bus/pci/devices/%s/virtio*/block/)
 [ -z "$device" ] && false
 podman run --security-opt label=disable --net=host -d -v %s:/output --name %s --privileged -w /output --tls-verify=false -v /dev/"$device":/dev/device-to-test %s
-`, OutputTestDir, pciAddressShell(pciAddress), OutputTestDir, FioContainerName, imageWorkload)
-	}
+# poweroff -p
+`,
+		OutputDir,
+		pvcOutputName, OutputDir,
+		pciAddressShell(pciAddress),
+		OutputDir, FioContainerName, imageWorkload)
+
 	var order uint
 	order = 1
 	disks = append(disks, kubevirtcorev1.Disk{
@@ -213,6 +238,12 @@ sudo loginctl enable-linger root
 			Domain: kubevirtcorev1.DomainSpec{
 				Devices: kubevirtcorev1.Devices{
 					Disks: disks,
+					Filesystems: []kubevirtcorev1.Filesystem{
+						{
+							Name:     pvcOutputName,
+							Virtiofs: &kubevirtcorev1.FilesystemVirtiofs{},
+						},
+					},
 				},
 				Resources: kubevirtcorev1.ResourceRequirements{
 					Requests: requests,

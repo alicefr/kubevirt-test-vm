@@ -13,8 +13,6 @@ import (
 	"kubevirt.io/kubevirt/pkg/virtctl/templates"
 )
 
-const outputFioTest = "/output"
-
 var (
 	podName string
 	pvcName string
@@ -41,17 +39,8 @@ func NewCreateTestPodCommand(clientConfig clientcmd.ClientConfig) *cobra.Command
 	return cmd
 }
 
-func PvcOutputName(podName string) string {
-	if podName == "" {
-		return "fio-output"
-	}
-	return fmt.Sprintf("fio-output-%s", podName)
-}
-
 func (c *createPodCommand) run(cmd *cobra.Command, args []string) error {
 	labels := map[string]string{labelTest: podName}
-	vMode := k8scorev1.PersistentVolumeFilesystem
-	pvcOutputName := PvcOutputName(podName)
 	client, err := GetKubernetesClient(c.clientConfig)
 	if err != nil {
 		return err
@@ -66,29 +55,13 @@ func (c *createPodCommand) run(cmd *cobra.Command, args []string) error {
 	if pvcName == "" {
 		return fmt.Errorf("the pvc cannot be empty")
 	}
-	requestPVCs := map[k8scorev1.ResourceName]resource.Quantity{
-		k8scorev1.ResourceStorage: resource.MustParse("1G"),
-	}
+
 	// Create pvc for the output
-	pvc := &k8scorev1.PersistentVolumeClaim{
-		ObjectMeta: k8smetav1.ObjectMeta{
-			Name:   pvcOutputName,
-			Labels: labels,
-		},
-		Spec: k8scorev1.PersistentVolumeClaimSpec{
-			VolumeMode:  &vMode,
-			AccessModes: []k8scorev1.PersistentVolumeAccessMode{k8scorev1.ReadWriteOnce},
-			Resources: k8scorev1.ResourceRequirements{
-				Requests: requestPVCs,
-			},
-		},
-	}
-	_, err = client.CoreV1().PersistentVolumeClaims(namespace).Create(context.TODO(), pvc, k8smetav1.CreateOptions{})
+	pvcOutputName := PvcOutputName(podName)
+	err = CreateOutputPVC(client, pvcOutputName, namespace, labels)
+
 	if err != nil {
-		if !errors.IsAlreadyExists(err) {
-			return err
-		}
-		fmt.Printf("PVC %s already exists \n", pvcName)
+		return err
 	}
 
 	resources := map[k8scorev1.ResourceName]resource.Quantity{
@@ -128,7 +101,7 @@ func (c *createPodCommand) run(cmd *cobra.Command, args []string) error {
 					Name:       podName,
 					Image:      image,
 					Command:    []string{"/fio.sh"},
-					WorkingDir: outputFioTest,
+					WorkingDir: OutputDir,
 					Stdin:      true,
 					TTY:        true,
 					Resources: k8scorev1.ResourceRequirements{
@@ -141,7 +114,7 @@ func (c *createPodCommand) run(cmd *cobra.Command, args []string) error {
 						{
 							Name:      pvcOutputName,
 							ReadOnly:  false,
-							MountPath: outputFioTest,
+							MountPath: OutputDir,
 						},
 					},
 					VolumeDevices: []k8scorev1.VolumeDevice{

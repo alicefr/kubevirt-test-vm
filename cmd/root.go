@@ -6,8 +6,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 	"kubevirt.io/client-go/kubecli"
 	"kubevirt.io/client-go/log"
 )
@@ -52,8 +50,7 @@ func NewVirtctlTestCommand() *cobra.Command {
 	rootCmd.AddCommand(
 		NewCreateTestVMCommand(clientConfig),
 		NewCreateTestPodCommand(clientConfig),
-		NewCopyOutputVMCommand(clientConfig),
-		NewCopyOutputPodCommand(clientConfig),
+		NewCopyOutputCommand(clientConfig),
 		NewDeleteTestVMCommand(clientConfig),
 		NewDeleteTestPodCommand(clientConfig),
 	)
@@ -67,13 +64,4 @@ func Execute() {
 		fmt.Fprintln(cmd.Root().ErrOrStderr(), strings.TrimSpace(err.Error()))
 		os.Exit(1)
 	}
-}
-
-func GetKubernetesClient(clientConfig clientcmd.ClientConfig) (*kubernetes.Clientset, error) {
-	conf, err := clientConfig.ClientConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	return kubernetes.NewForConfig(conf)
 }

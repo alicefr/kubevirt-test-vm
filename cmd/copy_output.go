@@ -22,26 +22,31 @@ import (
 
 const copyOutputImage = "quay.io/quay/busybox:latest"
 
-type copyOutputPodCommand struct {
+type copyOutputCommand struct {
 	clientConfig clientcmd.ClientConfig
 }
 
-func NewCopyOutputPodCommand(clientConfig clientcmd.ClientConfig) *cobra.Command {
+var (
+	localOutputDir string
+	name           string
+)
+
+func NewCopyOutputCommand(clientConfig clientcmd.ClientConfig) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "outputPod",
-		Short: "copy the results of the tests locally for the VM",
+		Use:   "output",
+		Short: "copy the results of the tests locally",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c := copyOutputPodCommand{clientConfig: clientConfig}
+			c := copyOutputCommand{clientConfig: clientConfig}
 			return c.run(cmd, args)
 		},
 	}
-	cmd.PersistentFlags().StringVar(&podName, "name", "", "Name for the testing pod")
-	cmd.PersistentFlags().StringVar(&outputDir, "output", "", "Directory where the test output should be copied")
+	cmd.PersistentFlags().StringVar(&name, "name", "", "Name for the testing pod/VM")
+	cmd.PersistentFlags().StringVar(&localOutputDir, "output", "", "Directory where the test output should be copied")
 	cmd.SetUsageTemplate(templates.UsageTemplate())
 	return cmd
 }
 
-func (c *copyOutputPodCommand) run(cmd *cobra.Command, args []string) error {
+func (c *copyOutputCommand) run(cmd *cobra.Command, args []string) error {
 	client, err := GetKubernetesClient(c.clientConfig)
 	if err != nil {
 		return err
@@ -50,20 +55,19 @@ func (c *copyOutputPodCommand) run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if podName == "" {
+	if name == "" {
 		return fmt.Errorf("the pod cannot be empty")
 	}
-	copyPodName := "copy-" + podName
+	copyPodName := "copy-" + name
 	// Copy output locally
-	if outputDir == "" {
+	if localOutputDir == "" {
 		path, err := os.Getwd()
 		if err != nil {
 			return err
 		}
-		outputDir = filepath.Join(path, "pod-output")
+		localOutputDir = filepath.Join(path, fmt.Sprintf("%s-output", name))
 	}
-	pvcOutput := PvcOutputName(podName)
-	dir := "/output"
+	pvcOutput := PvcOutputName(name)
 	pod := &k8scorev1.Pod{
 		ObjectMeta: k8smetav1.ObjectMeta{
 			Name: copyPodName,
@@ -90,7 +94,7 @@ func (c *copyOutputPodCommand) run(cmd *cobra.Command, args []string) error {
 						{
 							Name:      pvcOutput,
 							ReadOnly:  false,
-							MountPath: dir,
+							MountPath: OutputDir,
 						},
 					},
 				},
@@ -102,15 +106,15 @@ func (c *copyOutputPodCommand) run(cmd *cobra.Command, args []string) error {
 		if !errors.IsAlreadyExists(err) {
 			return err
 		}
-		fmt.Printf("Pod %s already exists \n", podName)
+		fmt.Printf("Pod %s already exists \n", name)
 	}
 	if err = waitPodRunning(client, copyPodName, namespace); err != nil {
 		return err
 	}
 
 	opts := []string{"cp",
-		fmt.Sprintf("%s/%s:%s", namespace, copyPodName, dir),
-		outputDir,
+		fmt.Sprintf("%s/%s:%s", namespace, copyPodName, OutputDir),
+		localOutputDir,
 	}
 	command := exec.Command("kubectl", opts...)
 	command.Stdout = os.Stdout
