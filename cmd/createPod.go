@@ -34,7 +34,7 @@ func NewCreateTestPodCommand(clientConfig clientcmd.ClientConfig) *cobra.Command
 	}
 	cmd.PersistentFlags().StringVar(&podName, "name", "", "Name for the testing pod")
 	cmd.PersistentFlags().StringVar(&pvcName, "pvc", "", "Name of the PVC to run the tests")
-	cmd.PersistentFlags().StringVar(&image, "image", DefaultWorkloadImage, "Name of the image to run the tests")
+	cmd.PersistentFlags().StringVar(&image, "workload-image", DefaultWorkloadImage, "Name of the image to run the tests")
 	cmd.SetUsageTemplate(templates.UsageTemplate())
 	return cmd
 }
