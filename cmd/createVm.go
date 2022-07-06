@@ -177,7 +177,7 @@ mount -t virtiofs %s %s
 device=$(ls /sys/bus/pci/devices/%s/virtio*/block/)
 [ -z "$device" ] && false
 podman run --security-opt label=disable --net=host -d -v %s:/output --name %s --privileged -w /output --tls-verify=false -v /dev/"$device":/dev/device-to-test %s
-# poweroff -p
+poweroff -p
 `,
 		OutputDir,
 		pvcOutputName, OutputDir,
