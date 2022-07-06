@@ -7,6 +7,8 @@ For running the tests in the VM, cloud-init, podman, qemu-guest-agent and ssh-se
 
 The binary `virtctl-test` helps you in creating a test VM for running fio test in a containerized way. You need to have install on your system `kubectl` binary as `virtctl-test` calls it in order to copy the output from the VMs and the pods.
 
+Virtiofs is required for storing the test output in a filesystem PVC. You can enable it in KubeVirt using the feature gate `ExperimentalVirtiofsSupport`.
+
 ## Create a test VM
 You can use the command `virtctl-test createVM` in order to create a test VM. Example:
 ```bash
