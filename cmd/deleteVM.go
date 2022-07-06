@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/api/errors"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
 	"kubevirt.io/client-go/kubecli"
@@ -51,7 +52,7 @@ func (c *deleteCommand) run(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Failed deleting VMI %s: %v \n", vmName, err)
 	}
 	err = client.CoreV1().Secrets(namespace).Delete(context.TODO(), vmName+"-ssh-key", k8smetav1.DeleteOptions{})
-	if err != nil {
+	if err != nil && !errors.IsNotFound(err) {
 		fmt.Printf("Failed deleting the secret %s: %v \n", vmName+"-ssh-key", err)
 	}
 	return nil
