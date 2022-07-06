@@ -51,8 +51,7 @@ func NewVirtctlTestCommand() *cobra.Command {
 		NewCreateTestVMCommand(clientConfig),
 		NewCreateTestPodCommand(clientConfig),
 		NewCopyOutputCommand(clientConfig),
-		NewDeleteTestVMCommand(clientConfig),
-		NewDeleteTestPodCommand(clientConfig),
+		NewDeleteTestCommand(clientConfig),
 	)
 	return rootCmd
 }
