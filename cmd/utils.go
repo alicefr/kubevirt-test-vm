@@ -49,6 +49,9 @@ func CreateOutputPVC(client *kubernetes.Clientset, pvcClaim, namespace string, l
 		}
 		fmt.Printf("PVC %s already exists \n", pvcName)
 	}
+	if err != nil {
+		fmt.Printf("Created PVC %s \n", pvcName)
+	}
 	return nil
 
 }
