@@ -1,0 +1,4 @@
+*.swp
+*/disk.img
+vmi-test/test-key*
+bin
